@@ -168,6 +168,7 @@ class ReputationMiner {
     let jhLeafValue;
     let justUpdatedProof;
     let originReputationProof;
+    let childReputationProof = await this.getReputationProofObject("0x00")
     let logEntry;
     let amount;
 
@@ -211,7 +212,6 @@ class ReputationMiner {
         const [nParents] = await this.colonyNetwork.getSkill(logEntry.skillId);
         const nChildUpdates = nUpdates.div(2).sub(1).sub(nParents);
         const relativeUpdateNumber = updateNumber.sub(logEntry.nPreviousUpdates).sub(this.nReputationsBeforeLatestLog);
-
         // Child updates are two sets: colonywide sums for children - located in the first nChildUpdates,
         // and user-specific updates located in the first nChildUpdates of the second half of the nUpdates set.
         if (
@@ -222,6 +222,16 @@ class ReputationMiner {
           const originSkillUpdateNumber = updateNumber.sub(relativeUpdateNumber).add(nUpdates).sub(1);
           const originSkillKey = await this.getKeyForUpdateNumber(originSkillUpdateNumber);
           originReputationProof = await this.getReputationProofObject(originSkillKey);
+
+          // Get the user-specific child reputation key.
+          let keyUsedInCalculations;
+          if (relativeUpdateNumber.lt(nChildUpdates)) {
+            const childSkillUpdateNumber = updateNumber.add(nUpdates.div(2));
+            keyUsedInCalculations = await this.getKeyForUpdateNumber(childSkillUpdateNumber);
+          } else {
+            keyUsedInCalculations = await this.getKeyForUpdateNumber(updateNumber);
+          }
+          childReputationProof = await this.getReputationProofObject(keyUsedInCalculations);
 
           const originSkillKeyExists = this.reputations[originSkillKey] !== undefined;
           if (originSkillKeyExists) {
@@ -235,14 +245,6 @@ class ReputationMiner {
             } else if (originReputation.isZero()) {          // If origin reputation is zero, then the rest reputation updates will be zero
               targetAmount = ethers.utils.bigNumberify("0");
             } else {
-              let keyUsedInCalculations;
-              // For colony wide reputation updates for child skills, consider the child skill reputation itself
-              if (relativeUpdateNumber.lt(nChildUpdates)) {
-                const childSkillUpdateNumber = updateNumber.add(nUpdates.div(2));
-                keyUsedInCalculations = await this.getKeyForUpdateNumber(childSkillUpdateNumber);
-              } else {
-                keyUsedInCalculations = await this.getKeyForUpdateNumber(updateNumber);
-              }
 
               const keyExists = this.reputations[keyUsedInCalculations] !== undefined;
               if (keyExists) {
@@ -294,10 +296,10 @@ class ReputationMiner {
         justUpdatedProof,
         nextUpdateProof,
         newestReputationProof,
-        originReputationProof
+        originReputationProof,
+        childReputationProof
       })
     );
-
     // console.log("updateNumber", updateNumber.toString());
     // console.log("key", key);
     // console.log("amount", amount.toString());
@@ -805,36 +807,6 @@ class ReputationMiner {
     if (lastAgreeIdx.gte(this.nReputationsBeforeLatestLog)) {
       logEntryNumber = await this.getLogEntryNumberForLogUpdateNumber(lastAgreeIdx.sub(this.nReputationsBeforeLatestLog));
     }
-    // console.log(
-    //   [
-    //     round,
-    //     index,
-    //     this.justificationHashes[firstDisagreeKey].justUpdatedProof.branchMask,
-    //     this.justificationHashes[lastAgreeKey].nextUpdateProof.nNodes,
-    //     ReputationMiner.getHexString(agreeStateBranchMask),
-    //     this.justificationHashes[firstDisagreeKey].justUpdatedProof.nNodes,
-    //     ReputationMiner.getHexString(disagreeStateBranchMask),
-    //     this.justificationHashes[lastAgreeKey].newestReputationProof.branchMask,
-    //     logEntryNumber,
-    //     "0",
-    //     this.justificationHashes[lastAgreeKey].originReputationProof.branchMask,
-    //     this.justificationHashes[lastAgreeKey].nextUpdateProof.reputation,
-    //     this.justificationHashes[lastAgreeKey].nextUpdateProof.uid,
-    //     this.justificationHashes[firstDisagreeKey].justUpdatedProof.reputation,
-    //     this.justificationHashes[firstDisagreeKey].justUpdatedProof.uid,
-    //     this.justificationHashes[lastAgreeKey].newestReputationProof.reputation,
-    //     this.justificationHashes[lastAgreeKey].newestReputationProof.uid,
-    //     this.justificationHashes[lastAgreeKey].originReputationProof.reputation,
-    //     this.justificationHashes[lastAgreeKey].originReputationProof.uid,
-    //   ],
-    //   reputationKey,
-    //   this.justificationHashes[firstDisagreeKey].justUpdatedProof.siblings,
-    //   agreeStateSiblings,
-    //   disagreeStateSiblings,
-    //   this.justificationHashes[lastAgreeKey].newestReputationProof.key,
-    //   this.justificationHashes[lastAgreeKey].newestReputationProof.siblings,
-    //   this.justificationHashes[lastAgreeKey].originReputationProof.key,
-    //   this.justificationHashes[lastAgreeKey].originReputationProof.siblings);
 
     return repCycle.respondToChallenge(
       [
@@ -857,6 +829,10 @@ class ReputationMiner {
         this.justificationHashes[lastAgreeKey].newestReputationProof.uid,
         this.justificationHashes[lastAgreeKey].originReputationProof.reputation,
         this.justificationHashes[lastAgreeKey].originReputationProof.uid,
+        this.justificationHashes[lastAgreeKey].childReputationProof.branchMask,
+        this.justificationHashes[lastAgreeKey].childReputationProof.reputation,
+        this.justificationHashes[lastAgreeKey].childReputationProof.uid,
+        "0"
       ],
       reputationKey,
       this.justificationHashes[firstDisagreeKey].justUpdatedProof.siblings,
@@ -866,6 +842,8 @@ class ReputationMiner {
       this.justificationHashes[lastAgreeKey].newestReputationProof.siblings,
       this.justificationHashes[lastAgreeKey].originReputationProof.key,
       this.justificationHashes[lastAgreeKey].originReputationProof.siblings,
+      this.justificationHashes[lastAgreeKey].childReputationProof.key,
+      this.justificationHashes[lastAgreeKey].childReputationProof.siblings,
       { gasLimit: 4000000 }
     );
   }

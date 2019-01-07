@@ -177,7 +177,7 @@ contract ColonyNetwork is ColonyNetworkStorage {
   calledByMetaColony
   {
     require(currentColonyVersion > 0, "colony-network-not-intialised-cannot-add-colony-version");
-    
+
     colonyVersionResolver[_version] = _resolver;
     if (_version > currentColonyVersion) {
       currentColonyVersion = _version;
@@ -186,8 +186,8 @@ contract ColonyNetwork is ColonyNetworkStorage {
     emit ColonyVersionAdded(_version, _resolver);
   }
 
-  function initialise(address _resolver) public 
-  auth 
+  function initialise(address _resolver) public
+  auth
   stoppable
   {
     require(currentColonyVersion == 0, "colony-network-already-initialised");
@@ -267,6 +267,10 @@ contract ColonyNetwork is ColonyNetworkStorage {
   calledByColony
   skillExists(_skillId)
   {
+    if (_amount == 0) {
+      return;
+    }
+
     uint nParents = skills[_skillId].nParents;
     // TODO: Is it cheaper to check if _amount is <0, and if not, just set nChildren to 0, because children won't be updated for such an update?
     uint nChildren = skills[_skillId].nChildren;
@@ -279,7 +283,7 @@ contract ColonyNetwork is ColonyNetworkStorage {
       nChildren
     );
   }
-  
+
   function checkNotAdditionalProtectedVariable(uint256 _slot) public view recovery {
   }
 
